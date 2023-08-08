@@ -31,9 +31,9 @@ impl BondForce {
 
     fn create_parameter(
         &mut self,
-        bond: &(usize, usize),
-        pos_1: f64,
-        pos_2: f64,
+        _bond: &(usize, usize),
+        _pos_1: f64,
+        _pos_2: f64,
     ) {
         todo!()
     }
@@ -165,10 +165,10 @@ struct ModSemMaths;
 
 impl ModSemMaths {
     fn force_constant_bond(
-        bond: &(usize, usize),
-        eigenvals: &Array3<Complex64>,
-        eigenvecs: &Array4<Complex64>,
-        coordinates: &[f64],
+        _bond: &(usize, usize),
+        _eigenvals: &Array3<Complex64>,
+        _eigenvecs: &Array4<Complex64>,
+        _coordinates: &[f64],
     ) -> f64 {
         todo!()
     }
@@ -316,10 +316,10 @@ impl ModSeminario {
 
     fn calculate_angles(
         &self,
-        eigenvals: &Array3<Complex64>,
-        eigenvecs: &Array4<Complex64>,
-        molecule: &mut Ligand,
-        bond_lens: &Array2<f64>,
+        _eigenvals: &Array3<Complex64>,
+        _eigenvecs: &Array4<Complex64>,
+        _molecule: &mut Ligand,
+        _bond_lens: &Array2<f64>,
     ) {
         todo!()
     }
@@ -328,8 +328,7 @@ impl ModSeminario {
 fn run(s: String) -> Vec<Ligand> {
     let ligand: Vec<Ligand> = serde_json::from_str(&s).unwrap();
     let mod_sem = ModSeminario::new();
-    let ligand = mod_sem.run(ligand);
-    ligand
+    mod_sem.run(ligand)
 }
 
 fn main() {
