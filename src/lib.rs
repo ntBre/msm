@@ -325,6 +325,8 @@ impl ModSeminario {
     }
 }
 
+/// deserialize a vector of [Ligand]s from `s` and run the modified Seminario
+/// method on them
 pub fn run(s: String) -> Vec<Ligand> {
     let ligand: Vec<Ligand> = serde_json::from_str(&s).unwrap();
     let mod_sem = ModSeminario::new();
