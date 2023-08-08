@@ -332,4 +332,3 @@ pub fn run(s: String) -> Vec<Ligand> {
     let mod_sem = ModSeminario::new();
     mod_sem.run(ligand)
 }
-
