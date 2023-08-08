@@ -1,4 +1,7 @@
-use std::io::{self, Read};
+use std::{
+    fs::File,
+    io::{self, Read},
+};
 
 use ndarray::{s, Array, Array1, Array2, Array3, Array4};
 use ndarray_linalg::{Eig, Norm};
@@ -24,6 +27,15 @@ impl BondForce {
         if let Some(ref mut parameters) = &mut self.parameters {
             parameters.clear();
         }
+    }
+
+    fn create_parameter(
+        &mut self,
+        bond: &(usize, usize),
+        pos_1: f64,
+        pos_2: f64,
+    ) {
+        todo!()
     }
 }
 
@@ -119,6 +131,10 @@ struct Ligand {
     wbo: Value,
 }
 
+struct Graph {
+    edges: Vec<(usize, usize)>,
+}
+
 impl Ligand {
     fn hessian(&self) -> &Vec<f64> {
         self.hessian.as_ref().unwrap()
@@ -128,16 +144,33 @@ impl Ligand {
         todo!()
     }
 
-    fn coordinates(&self, i: usize) -> Array1<f64> {
+    /// unwrap self.coordinates and return the whole vector
+    fn coordinates(&self) -> &Vec<f64> {
+        self.coordinates.as_ref().unwrap()
+    }
+
+    /// unwrap self.coordinates and return the ith entry
+    fn coordinates_at(&self, i: usize) -> Array1<f64> {
         Array1::from(
-            self.coordinates
-                .as_ref()
-                .unwrap()
-                .chunks_exact(3)
-                .nth(i)
-                .unwrap()
-                .to_vec(),
+            self.coordinates().chunks_exact(3).nth(i).unwrap().to_vec(),
         )
+    }
+
+    fn to_topology(&self) -> Graph {
+        todo!()
+    }
+}
+
+struct ModSemMaths;
+
+impl ModSemMaths {
+    fn force_constant_bond(
+        bond: &(usize, usize),
+        eigenvals: &Array3<Complex64>,
+        eigenvecs: &Array4<Complex64>,
+        coordinates: &[f64],
+    ) -> f64 {
+        todo!()
     }
 }
 
@@ -198,8 +231,8 @@ impl ModSeminario {
         for i in 0..size_mol {
             for j in 0..size_mol {
                 // TODO use a dvector or whatever ndarray provides
-                let ci = molecule.coordinates(i);
-                let cj = molecule.coordinates(j);
+                let ci = molecule.coordinates_at(i);
+                let cj = molecule.coordinates_at(j);
                 let diff_i_j = ci - cj;
                 bond_lens[(i, j)] = diff_i_j.norm();
 
@@ -223,7 +256,62 @@ impl ModSeminario {
         molecule: &mut Ligand,
         bond_lens: &Array2<f64>,
     ) {
-        todo!()
+        let bonds = molecule.to_topology().edges;
+        const KCAL_TO_KJ: f64 = 4.184;
+        const CONVERSION: f64 = 200.0 * KCAL_TO_KJ;
+
+        let mut k_b = vec![0.0; bonds.len()];
+        let mut bond_len_list = vec![0.0; bonds.len()];
+
+        // TODO I DO NOT want to do this long term. please let me just return
+        // what I need. It doesn't appear to be used by my Python script, so
+        // hopefully I can just use it temporarily for debugging and then
+        // delete.
+        let mut bond_file =
+            File::create("Modified_Seminario_Bonds.txt").unwrap();
+
+        for (pos, bond) in bonds.iter().enumerate() {
+            let ab = ModSemMaths::force_constant_bond(
+                bond,
+                eigenvals,
+                eigenvecs,
+                molecule.coordinates(),
+            );
+
+            let ba = ModSemMaths::force_constant_bond(
+                &(bond.1, bond.0), // bond[::-1]
+                eigenvals,
+                eigenvecs,
+                molecule.coordinates(),
+            );
+
+            // TODO may need real part of the first term
+            k_b[pos] = ((ab + ba) / 2.0)
+                * (self.vibrational_scaling * self.vibrational_scaling);
+
+            bond_len_list[pos] = bond_lens[*bond];
+
+            use std::io::Write;
+            write!(
+                bond_file,
+                "{}-{}  ",
+                molecule.atoms[bond.0].atom_name.as_ref().unwrap(),
+                molecule.atoms[bond.1].atom_name.as_ref().unwrap(),
+            )
+            .unwrap();
+            writeln!(
+                bond_file,
+                "{}    {}    {}    {}",
+                k_b[pos], bond_len_list[pos], bond.0, bond.1,
+            )
+            .unwrap();
+
+            molecule.bond_force.create_parameter(
+                bond,
+                bond_len_list[pos] / 10.0,
+                CONVERSION * k_b[pos],
+            );
+        }
     }
 
     fn calculate_angles(
