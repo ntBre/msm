@@ -1,7 +1,9 @@
 use std::{f64::consts::PI, fs::File, io::Write};
 
 use graph::Graph;
-use ndarray::{s, Array, Array1, Array2, Array3, Array4};
+use ndarray::{
+    s, Array, Array1, Array2, Array3, Array4, ArrayView1, ArrayView2,
+};
 use ndarray_linalg::{Eig, Norm};
 use num_complex::Complex64;
 use serde::{Deserialize, Serialize};
@@ -16,6 +18,8 @@ const KCAL_TO_KJ: f64 = 4.184;
 
 /// Degrees to radians
 const DEG_TO_RAD: f64 = PI / 180.0;
+
+type Dvec = Array1<f64>;
 
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
 struct HarmonicBondParameter {
@@ -280,21 +284,131 @@ impl ModSemMaths {
         &diff_ab / diff_ab.norm()
     }
 
+    /// returns the vector in plane ABC and perpendicular to AB
     fn u_pa_from_angles(
-        _angle: (usize, usize, usize),
-        _coordinates: &Option<Vec<f64>>,
+        (a, b, c): (usize, usize, usize),
+        coordinates: &[f64],
     ) -> Array1<f64> {
-        todo!()
+        let u_ab = ModSemMaths::unit_vector_along_bond(coordinates, (a, b));
+        let u_cb = ModSemMaths::unit_vector_along_bond(coordinates, (c, b));
+
+        let u_n = ModSemMaths::unit_vector_normal_to_bond(&u_cb, &u_ab);
+
+        ModSemMaths::unit_vector_normal_to_bond(&u_n, &u_ab)
     }
 
     fn force_constant_angle(
-        _angle: (usize, usize, usize),
-        _bond_lens: &Array2<f64>,
-        _eigenvals: &Array3<Complex64>,
-        _eigenvecs: &Array4<Complex64>,
-        _coordinates: &Option<Vec<f64>>,
-        _scalings: &[f64],
+        angle: (usize, usize, usize),
+        bond_lens: &Array2<f64>,
+        eigenvals: &Array3<Complex64>,
+        eigenvecs: &Array4<Complex64>,
+        coords: &[f64],
+        scalings: &[f64],
     ) -> (f64, f64) {
+        let (atom_a, atom_b, atom_c) = angle;
+
+        let u_ab =
+            ModSemMaths::unit_vector_along_bond(coords, (atom_a, atom_b));
+        let u_cb =
+            ModSemMaths::unit_vector_along_bond(coords, (atom_c, atom_b));
+
+        let bond_len_ab = bond_lens[(atom_a, atom_b)];
+        let eigenvals_ab = eigenvals.slice(s![atom_a, atom_b, ..]);
+        let eigenvecs_ab = eigenvecs.slice(s![..3, ..3, atom_a, atom_b]);
+
+        let bond_len_bc = bond_lens[(atom_b, atom_c)];
+        let eigenvals_cb = eigenvals.slice(s![atom_c, atom_b, ..]);
+        let eigenvecs_cb = eigenvecs.slice(s![..3, ..3, atom_c, atom_b]);
+
+        // Normal vector to angle plane found
+        let u_n = ModSemMaths::unit_vector_normal_to_bond(&u_cb, &u_ab);
+
+        // Angle is linear:
+        let abs = (&u_cb - &u_ab).norm().abs();
+
+        let (mut k_theta, theta_0);
+        if abs < 0.01 || (1.99 < abs && abs < 2.01) {
+            // Scalings are set to 1.
+            (k_theta, theta_0) = ModSemMaths::f_c_a_special_case(
+                u_ab,
+                u_cb,
+                [bond_len_ab, bond_len_bc],
+                [eigenvals_ab, eigenvals_cb],
+                [eigenvecs_ab, eigenvecs_cb],
+            );
+        } else {
+            let u_pa = ModSemMaths::unit_vector_normal_to_bond(&u_n, &u_ab);
+            let u_pc = ModSemMaths::unit_vector_normal_to_bond(&u_cb, &u_n);
+
+            // Scaling due to additional angles - Modified Seminario Part
+            let mut sum = 0.0;
+            for i in 0..3 {
+                let p = eigenvals_ab[i]
+                    * ModSemMaths::dot_product(
+                        &u_pa,
+                        eigenvecs_ab.slice(s![.., i]),
+                    );
+                sum += p.re.abs();
+            }
+            let sum_first = sum / scalings[0];
+
+            let mut sum = 0.0;
+            for i in 0..3 {
+                let p = eigenvals_cb[i]
+                    * ModSemMaths::dot_product(
+                        &u_pc,
+                        eigenvecs_cb.slice(s![.., i]),
+                    );
+                sum += p.re.abs();
+            }
+            let sum_second = sum / scalings[1];
+
+            // Added as two springs in series
+            k_theta = (1.0 / ((bond_len_ab * bond_len_ab) * sum_first))
+                + (1.0 / ((bond_len_bc * bond_len_bc) * sum_second));
+            k_theta = 1.0 / k_theta;
+
+            // Change to OPLS form
+            k_theta = (k_theta * 0.5).abs();
+
+            // Equilibrium Angle
+            theta_0 = u_ab.dot(&u_cb).acos().to_degrees();
+        }
+
+        (k_theta, theta_0)
+    }
+
+    fn unit_vector_normal_to_bond(b: &Dvec, c: &Dvec) -> Dvec {
+        assert_eq!(b.len(), 3);
+        assert_eq!(c.len(), 3);
+
+        // unfortunately ndarray doesn't seem to have a cross product
+        let cross = Dvec::from(vec![
+            b[1] * c[2] - b[2] * c[1],
+            b[2] * c[0] - b[0] * c[2],
+            b[0] * c[1] - b[1] * c[0],
+        ]);
+
+        &cross / cross.norm()
+    }
+
+    fn f_c_a_special_case(
+        _u_ab: Dvec,
+        _u_cb: Dvec,
+        _bond_len_bc: [f64; 2],
+        _eigenvals_cb: [ArrayView1<Complex64>; 2],
+        _eigenvecs_cb: [ArrayView2<Complex64>; 2],
+    ) -> (f64, f64) {
+        todo!()
+    }
+
+    fn dot_product(
+        _u_pa: &Dvec,
+        _s: ndarray::ArrayBase<
+            ndarray::ViewRepr<&num_complex::Complex<f64>>,
+            ndarray::Dim<[usize; 1]>,
+        >,
+    ) -> Complex64 {
         todo!()
     }
 }
@@ -439,10 +553,10 @@ impl ModSeminario {
 
     fn calculate_angles(
         &self,
-        _eigenvals: &Array3<Complex64>,
-        _eigenvecs: &Array4<Complex64>,
+        eigenvals: &Array3<Complex64>,
+        eigenvecs: &Array4<Complex64>,
         molecule: &mut Ligand,
-        _bond_lens: &Array2<f64>,
+        bond_lens: &Array2<f64>,
     ) {
         // A structure is created with the index giving the central atom of the
         // angle; an array then lists the angles with that central atom. e.g.
@@ -483,7 +597,7 @@ impl ModSeminario {
                 );
                 unit_pa_all_angles[i].push(ModSemMaths::u_pa_from_angles(
                     angle,
-                    &molecule.coordinates,
+                    molecule.coordinates(),
                 ));
             }
         }
@@ -571,18 +685,18 @@ impl ModSeminario {
 
             let (ab_k_theta, ab_theta_0) = ModSemMaths::force_constant_angle(
                 *angle,
-                _bond_lens,
-                _eigenvals,
-                _eigenvecs,
-                &molecule.coordinates,
+                bond_lens,
+                eigenvals,
+                eigenvecs,
+                molecule.coordinates(),
                 scalings,
             );
             let (ba_k_theta, ba_theta_0) = ModSemMaths::force_constant_angle(
                 (angle.2, angle.1, angle.0),
-                _bond_lens,
-                _eigenvals,
-                _eigenvecs,
-                &molecule.coordinates,
+                bond_lens,
+                eigenvals,
+                eigenvecs,
+                molecule.coordinates(),
                 &rev_scalings,
             );
 
