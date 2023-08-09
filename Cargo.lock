@@ -312,6 +312,7 @@ dependencies = [
  "ndarray",
  "ndarray-linalg",
  "num-complex",
+ "rodeo",
  "serde",
  "serde_json",
 ]
@@ -571,6 +572,13 @@ dependencies = [
  "getrandom",
  "redox_syscall 0.2.16",
  "thiserror",
+]
+
+[[package]]
+name = "rodeo"
+version = "0.1.0"
+dependencies = [
+ "bitflags 2.3.3",
 ]
 
 [[package]]

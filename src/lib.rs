@@ -6,6 +6,7 @@ use ndarray::{
 };
 use ndarray_linalg::{Eig, Norm};
 use num_complex::Complex64;
+use rodeo::{AromaticityModel, BondStereo, BondType, RWMol};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -165,6 +166,11 @@ struct Atom {
     quadrupole: Option<()>,
     cloud_pen: Option<()>,
 }
+impl Atom {
+    fn to_rdkit(&self) -> rodeo::Atom {
+        todo!()
+    }
+}
 
 #[derive(Debug, Deserialize, Serialize)]
 struct Bond {
@@ -173,6 +179,12 @@ struct Bond {
     bond_order: f64,
     aromatic: bool,
     stereochemistry: Option<String>,
+}
+
+impl Bond {
+    fn rdkit_stereo(&self) -> BondStereo {
+        todo!();
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -309,7 +321,8 @@ impl Ligand {
     }
 
     fn atom_types(&self) -> HashMap<usize, String> {
-        todo!()
+        let m = self.to_rdkit();
+        m.find_symmetry_classes()
     }
 
     fn cluster_types(
@@ -317,6 +330,76 @@ impl Ligand {
         _bond_types: HashMap<String, Vec<(usize, usize)>>,
     ) -> HashMap<usize, String> {
         todo!()
+    }
+
+    fn to_rdkit(&self) -> RWMol {
+        let mut rd_mol = RWMol::new();
+        rd_mol.set_name(self.name.clone());
+
+        for atom in &self.atoms {
+            let rd_index = rd_mol.add_atom(atom.to_rdkit());
+            assert_eq!(rd_index, atom.atom_index);
+        }
+
+        for bond in self.bonds() {
+            rd_mol.add_bond(bond.atom1_index, bond.atom2_index);
+            let rd_bond = rd_mol
+                .get_bond_between_atoms_mut(bond.atom1_index, bond.atom2_index);
+            rd_bond.set_is_aromatic(bond.aromatic);
+
+            use BondType::*;
+            let bt = match format!("{:.1}", bond.bond_order).as_str() {
+                "1.0" => Single,
+                "1.5" => Aromatic,
+                "2.0" => Double,
+                "3.0" => Triple,
+                "4.0" => Quadruple,
+                "5.0" => Quintuple,
+                "6.0" => Hextuple,
+                "7.0" => OneAndAHalf,
+                _ => panic!("unrecognized bond order {}", bond.bond_order),
+            };
+            rd_bond.set_bond_type(bt);
+        }
+
+        use rodeo::SanitizeOptions as SO;
+        rd_mol.sanitize(SO::All ^ SO::AdjustHS ^ SO::SetAromaticity);
+
+        // must use OpenFF MDL model for compatibility
+        rd_mol.set_aromaticity(AromaticityModel::MDL);
+
+        rd_mol.add_conformer(self.coordinates());
+        rd_mol.assign_stereochemistry_from_3d();
+
+        // now check that the stereo has not been broken
+        for rd_atom in rd_mol.get_atoms() {
+            let index = rd_atom.get_index();
+            let qb_atom = &self.atoms[index];
+            if qb_atom.stereochemistry.is_some() {
+                // really rd_atom.getProp("_CIPCode");
+                assert_eq!(
+                    qb_atom.stereochemistry.as_ref().unwrap(),
+                    &rd_atom.get_stereo()
+                );
+            }
+        }
+
+        for rd_bond in rd_mol.get_bonds_mut() {
+            let index = rd_bond.get_index();
+            let qb_bond = &self.bonds()[index];
+            if qb_bond.stereochemistry.is_some() {
+                rd_bond.set_stereo(qb_bond.rdkit_stereo());
+            }
+            let rd_stereo = rd_bond.get_stereo();
+            if qb_bond.stereochemistry.as_ref().is_some_and(|b| b == "E") {
+                assert_eq!(rd_stereo, BondStereo::E);
+            } else if qb_bond.stereochemistry.as_ref().is_some_and(|b| b == "Z")
+            {
+                assert_eq!(rd_stereo, BondStereo::Z);
+            }
+        }
+
+        rd_mol
     }
 }
 
