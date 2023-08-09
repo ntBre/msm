@@ -68,13 +68,9 @@ impl BondForce {
     }
 
     fn get(&self, index: (usize, usize)) -> Option<&HarmonicBondParameter> {
-        for parameter in self.parameters.as_ref().unwrap() {
-            if parameter.atoms == index || parameter.atoms == (index.1, index.0)
-            {
-                return Some(parameter);
-            }
-        }
-        None
+        self.parameters.as_ref().unwrap().iter().find(|&parameter| {
+            parameter.atoms == index || parameter.atoms == (index.1, index.0)
+        })
     }
 }
 
