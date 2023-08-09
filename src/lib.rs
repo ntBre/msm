@@ -402,14 +402,17 @@ impl ModSemMaths {
         todo!()
     }
 
-    fn dot_product(
-        _u_pa: &Dvec,
-        _s: ndarray::ArrayBase<
-            ndarray::ViewRepr<&num_complex::Complex<f64>>,
-            ndarray::Dim<[usize; 1]>,
-        >,
-    ) -> Complex64 {
-        todo!()
+    fn dot_product(u_pa: &Dvec, s: ArrayView1<Complex64>) -> f64 {
+        assert_eq!(u_pa.len(), 3);
+        assert_eq!(s.len(), 3);
+
+        let mut sum = 0.0;
+        for i in 0..3 {
+            let p = u_pa[i] * s[i].conj();
+            assert_eq!(p.im, 0.0);
+            sum += p.re;
+        }
+        sum
     }
 }
 
