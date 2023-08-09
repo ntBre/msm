@@ -610,11 +610,11 @@ impl ModSeminario {
                 let mut n = 1;
                 let mut m = 1;
                 let mut extra_contribs = 0.0;
-                scaling_factor_all_angles[i].push([0.0, 0.0]);
+                scaling_factor_all_angles[i].push((0.0, 0));
 
                 // position in angle list
-                scaling_factor_all_angles[i][j][1] =
-                    central_atoms_angles[i][j][2] as f64;
+                scaling_factor_all_angles[i][j].1 =
+                    central_atoms_angles[i][j][2];
 
                 // goes through the list of angles with the same central atom,
                 // then computes the term needed for MSM.
@@ -643,10 +643,10 @@ impl ModSeminario {
                     m += 1;
                 }
 
-                scaling_factor_all_angles[i][j][0] = 1.0;
+                scaling_factor_all_angles[i][j].0 = 1.0;
                 if n != 1 || m != 1 {
                     // finds the mean value of the additional contribution
-                    scaling_factor_all_angles[i][j][0] +=
+                    scaling_factor_all_angles[i][j].0 +=
                         extra_contribs / (m + n - 2) as f64;
                 }
             }
@@ -660,13 +660,8 @@ impl ModSeminario {
         // orders the scaling factors according to the angle list
         for i in 0..central_atoms_angles.len() {
             for j in 0..central_atoms_angles[i].len() {
-                // TODO this really doesn't make sense. is this supposed to be a
-                // float or an int? the division thing and relationship to
-                // extra_contribs make it look like a float, but how are they
-                // using it to index here?
-                scaling_factors_angles_list
-                    [scaling_factor_all_angles[i][j][1] as usize]
-                    .push(scaling_factor_all_angles[i][j][0]);
+                scaling_factors_angles_list[scaling_factor_all_angles[i][j].1]
+                    .push(scaling_factor_all_angles[i][j].0);
             }
         }
 
