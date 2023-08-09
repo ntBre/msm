@@ -519,7 +519,7 @@ impl ModSeminario {
                 }
 
                 // backward direction, finds the same bonds with central atom i
-                while ((j - m) >= 0)
+                while (j >= m)
                     && central_atoms_angles[i][j][0]
                         == central_atoms_angles[i][j - m][0]
                 {
