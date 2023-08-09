@@ -463,8 +463,8 @@ impl ModSeminario {
         }
 
         // sort rows by atom number
-        for coord in 0..molecule.atoms.len() {
-            central_atoms_angles[coord].sort_by_key(|x| x[0]);
+        for coord in central_atoms_angles.iter_mut() {
+            coord.sort_by_key(|x| x[0]);
         }
 
         // find normals u_pa for each angle
