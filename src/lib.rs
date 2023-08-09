@@ -1,4 +1,4 @@
-use std::{f64::consts::PI, fs::File, io::Write};
+use std::{collections::HashMap, f64::consts::PI, fs::File, io::Write};
 
 use graph::Graph;
 use ndarray::{
@@ -78,10 +78,12 @@ impl BondForce {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, PartialEq, Serialize)]
 struct HarmonicAngleParameter {
-    length: f64,
+    angle: f64,
     k: f64,
+    #[serde(default)]
+    atoms: (usize, usize, usize),
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -98,13 +100,47 @@ impl AngleForce {
         }
     }
 
+    fn get(
+        &self,
+        index: (usize, usize, usize),
+    ) -> Option<&HarmonicAngleParameter> {
+        self.parameters.as_ref().unwrap().iter().find(|&parameter| {
+            parameter.atoms == index
+                || parameter.atoms == (index.2, index.1, index.0)
+        })
+    }
+
+    fn remove_parameter(&mut self, atoms: (usize, usize, usize)) {
+        let Some(parameter) = self.get(atoms) else {
+            return;
+        };
+        let idx = self
+            .parameters
+            .as_ref()
+            .unwrap()
+            .iter()
+            .position(|p| p == parameter)
+            .unwrap();
+        let parameters = self.parameters.as_mut().unwrap();
+        parameters.remove(idx);
+    }
+
     fn create_parameter(
         &mut self,
-        _angle: (usize, usize, usize),
-        _deg_to_rad: f64,
-        _conversion: f64,
+        atoms: (usize, usize, usize),
+        angle: f64,
+        k: f64,
     ) {
-        todo!()
+        if self.parameters.is_none() {
+            self.parameters = Some(Vec::new());
+        }
+
+        // always delete old params for some reason
+        self.remove_parameter(atoms);
+        self.parameters
+            .as_mut()
+            .unwrap()
+            .push(HarmonicAngleParameter { angle, k, atoms });
     }
 }
 
@@ -184,8 +220,14 @@ impl Ligand {
         self.hessian.as_ref().unwrap()
     }
 
+    /// Symmetrise all bond and angle force group parameters. Using the CIP
+    /// rankings from RDKit apply symmetry to the bond and angle force groups.
+    /// Important: We respect the predefined parameters in the bond/angle force
+    /// group which can be symmetrised.
     fn symmetrize_bonded_parameters(&mut self) {
-        todo!()
+        for _bond in self.bond_types().values() {
+            todo!();
+        }
     }
 
     /// unwrap self.coordinates and return the whole vector
@@ -235,6 +277,46 @@ impl Ligand {
         }
 
         angles
+    }
+
+    /// Using the symmetry dict, give each bond a code. If any codes match, the
+    /// bonds can be symmetrised. e.g. bond_symmetry_classes = {(0, 3): '2-0',
+    /// (0, 4): '2-0', (0, 5): '2-0' ...} all of the above bonds (tuples) are of
+    /// the same type (methyl H-C bonds in same region) This dict is then used
+    /// to produce bond_types. bond_types is just a dict where the keys are the
+    /// string code from above and the values are all of the bonds with that
+    /// particular type.
+    fn bond_types(&self) -> HashMap<usize, String> {
+        let atom_types = self.atom_types();
+        let mut bond_symmetry_classes = HashMap::new();
+        for bond in self.bonds() {
+            bond_symmetry_classes.insert(
+                (bond.atom1_index, bond.atom2_index),
+                format!(
+                    "{}-{}",
+                    atom_types[&bond.atom1_index],
+                    atom_types[&bond.atom2_index]
+                ),
+            );
+        }
+
+        let mut bond_types = HashMap::new();
+        for (key, val) in bond_symmetry_classes {
+            bond_types.entry(val).or_insert(Vec::new()).push(key);
+        }
+
+        self.cluster_types(bond_types)
+    }
+
+    fn atom_types(&self) -> HashMap<usize, String> {
+        todo!()
+    }
+
+    fn cluster_types(
+        &self,
+        _bond_types: HashMap<String, Vec<(usize, usize)>>,
+    ) -> HashMap<usize, String> {
+        todo!()
     }
 }
 
@@ -722,8 +804,6 @@ impl ModSeminario {
                 k_theta[i] * CONVERSION,
             )
         }
-
-        todo!()
     }
 }
 
