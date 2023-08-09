@@ -499,7 +499,6 @@ impl ModSeminario {
             for j in 0..central_atoms_angles[i].len() {
                 let mut n = 1;
                 let mut m = 1;
-                let mut angles_around = 0;
                 let mut extra_contribs = 0.0;
                 scaling_factor_all_angles[i].push([0.0, 0.0]);
 
@@ -521,7 +520,6 @@ impl ModSeminario {
                     let v2 = Array1::from(unit_pa_all_angles[i][j + n].clone());
                     extra_contribs += v1.dot(&v2).abs().powi(2);
                     n += 1;
-                    angles_around += 1;
                 }
 
                 // backward direction, finds the same bonds with central atom i
@@ -533,7 +531,6 @@ impl ModSeminario {
                     let v2 = Array1::from(unit_pa_all_angles[i][j - m].clone());
                     extra_contribs += v1.dot(&v2).abs().powi(2);
                     m += 1;
-                    angles_around += 1;
                 }
 
                 scaling_factor_all_angles[i][j][0] = 1.0;
