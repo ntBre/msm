@@ -1,21 +1,22 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 
+#[derive(Debug)]
 pub(crate) struct Graph {
     /// adjacency list?
-    adj: HashMap<usize, HashSet<usize>>,
-    nodes: HashSet<usize>,
+    adj: BTreeMap<usize, BTreeSet<usize>>,
+    nodes: BTreeSet<usize>,
 }
 
 impl Graph {
     pub(crate) fn new() -> Self {
         Self {
-            adj: HashMap::new(),
-            nodes: HashSet::new(),
+            adj: BTreeMap::new(),
+            nodes: BTreeSet::new(),
         }
     }
 
     pub(crate) fn add_node(&mut self, node: usize) {
-        self.adj.entry(node).or_insert(HashSet::new());
+        self.adj.entry(node).or_insert(BTreeSet::new());
         self.nodes.insert(node);
     }
 
@@ -31,13 +32,13 @@ impl Graph {
             .and_modify(|h| {
                 h.insert(j);
             })
-            .or_insert(HashSet::new());
+            .or_insert(BTreeSet::new());
         self.adj
             .entry(j)
             .and_modify(|h| {
                 h.insert(i);
             })
-            .or_insert(HashSet::new());
+            .or_insert(BTreeSet::new());
     }
 
     pub(crate) fn edges(&self) -> Vec<(usize, usize)> {
