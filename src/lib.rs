@@ -197,7 +197,14 @@ struct Bond {
 
 impl Bond {
     fn rdkit_stereo(&self) -> BondStereo {
-        todo!();
+        let Some(s) = self.stereochemistry.as_ref() else {
+            return BondStereo::None;
+        };
+        match s.as_str() {
+            "E" => BondStereo::E,
+            "S" => BondStereo::Z,
+            _ => BondStereo::None,
+        }
     }
 }
 
