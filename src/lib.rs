@@ -6,7 +6,7 @@ use ndarray::{
 };
 use ndarray_linalg::{Eig, Norm};
 use num_complex::Complex64;
-use rodeo::{AromaticityModel, BondStereo, BondType, RWMol};
+use rodeo::{AromaticityModel, BondStereo, BondType, Chi, RWMol};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -168,7 +168,21 @@ struct Atom {
 }
 impl Atom {
     fn to_rdkit(&self) -> rodeo::Atom {
-        todo!()
+        let mut rd_atom = rodeo::Atom::new(self.atomic_number);
+        rd_atom.set_formal_charge(self.formal_charge);
+        rd_atom.set_is_aromatic(self.aromatic);
+        if let Some(name) = &self.atom_name {
+            rd_atom.set_name(name.clone());
+        }
+        // left is counter clockwise
+        if self.stereochemistry.as_ref().is_some_and(|s| s == "S") {
+            rd_atom.set_chiral_tag(Chi::TetrahedralCCW);
+        }
+        // right is clockwise
+        if self.stereochemistry.as_ref().is_some_and(|s| s == "R") {
+            rd_atom.set_chiral_tag(Chi::TetrahedralCW);
+        }
+        rd_atom
     }
 }
 
