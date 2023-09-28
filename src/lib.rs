@@ -1,19 +1,18 @@
 use std::{collections::HashMap, f64::consts::PI, fs::File, io::Write};
 
-use graph::Graph;
 use ndarray::{
     s, Array, Array1, Array2, Array3, Array4, ArrayView1, ArrayView2,
 };
 use ndarray_linalg::{Eig, Norm};
 use num_complex::Complex64;
-use rodeo::{AromaticityModel, BondStereo, BondType, Chi, RWMol};
+use rodeo::bond::BondStereo;
+use rodeo::{AromaticityModel, Chi, RWMol};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use torx::Graph;
 
 #[cfg(test)]
 mod tests;
-
-mod graph;
 
 const KCAL_TO_KJ: f64 = 4.184;
 
@@ -364,11 +363,13 @@ impl Ligand {
 
         for bond in self.bonds() {
             rd_mol.add_bond(bond.atom1_index, bond.atom2_index);
+            // safe to unwrap because we just put it in there
             let rd_bond = rd_mol
-                .get_bond_between_atoms_mut(bond.atom1_index, bond.atom2_index);
+                .get_bond_between_atoms_mut(bond.atom1_index, bond.atom2_index)
+                .unwrap();
             rd_bond.set_is_aromatic(bond.aromatic);
 
-            use BondType::*;
+            use rodeo::bond::BondType::*;
             let bt = match format!("{:.1}", bond.bond_order).as_str() {
                 "1.0" => Single,
                 "1.5" => Aromatic,
@@ -384,7 +385,7 @@ impl Ligand {
         }
 
         use rodeo::SanitizeOptions as SO;
-        rd_mol.sanitize(SO::All ^ SO::AdjustHS ^ SO::SetAromaticity);
+        rd_mol.sanitize(SO::All ^ SO::AdjustHs ^ SO::SetAromaticity);
 
         // must use OpenFF MDL model for compatibility
         rd_mol.set_aromaticity(AromaticityModel::MDL);
